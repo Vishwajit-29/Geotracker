@@ -1,0 +1,48 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.project
+.classpath
+.settings/
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+
+# Compiled class files
+*.class
+
+# Log files
+logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Spring Boot specific
+spring-boot-devtools.properties
+
+# Environment files
+.env
+application-local.yml
+application-prod.yml
+
+# Test results
+/test-output/
+.coverage
+*.cover
+
+# Node (if any accidentally placed)
+node_modules/

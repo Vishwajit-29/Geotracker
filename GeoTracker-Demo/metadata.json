@@ -1,0 +1,7 @@
+{
+  "name": "GeoTracker",
+  "description": "A geolocation-based attendance tracking application prototype. Users can mark attendance with their location, and admins can monitor and export attendance data.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

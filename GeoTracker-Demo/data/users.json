@@ -1,0 +1,159 @@
+[
+  { "id": 1, "name": "admin", "role": "ADMIN", "password": "pass" },
+  {
+    "id": 2,
+    "name": "Yash",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 150
+    }
+  },
+  {
+    "id": 3,
+    "name": "Lalit",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 160
+    }
+  },
+  {
+    "id": 4,
+    "name": "Tanisha",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 150
+    }
+  },
+  {
+    "id": 5,
+    "name": "Kartik",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 155
+    }
+  },
+  {
+    "id": 6,
+    "name": "Ajit",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 160
+    }
+  },
+  {
+    "id": 7,
+    "name": "Adesh",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 165
+    }
+  },
+  {
+    "id": 8,
+    "name": "Hrushikesh",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 170
+    }
+  },
+  {
+    "id": 9,
+    "name": "Bhavesh",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 175
+    }
+  },
+  {
+    "id": 10,
+    "name": "Deva",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 180
+    }
+  },
+  {
+    "id": 11,
+    "name": "Rupesh",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 185
+    }
+  },
+  {
+    "id": 12,
+    "name": "Dhiraj",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 190
+    }
+  },
+  {
+    "id": 13,
+    "name": "Shubham",
+    "role": "EMPLOYEE",
+    "password": "pass",
+    "geofence": {
+      "center": {
+        "latitude": 21.012508072124326,
+        "longitude": 75.50259944788704
+      },
+      "radius": 195
+    }
+  }
+]
