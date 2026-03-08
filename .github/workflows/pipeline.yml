@@ -240,7 +240,7 @@ jobs:
               sudo tee /etc/nginx/sites-available/geotracker > /dev/null << 'NGINX'
           server {
               listen 80;
-              server_name _;
+              server_name vishwajit.tech www.vishwajit.tech;
 
               location / {
                   proxy_pass http://127.0.0.1:3000;
