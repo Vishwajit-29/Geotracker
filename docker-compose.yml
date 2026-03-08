@@ -67,12 +67,10 @@ services:
     build:
       context: ./GeoTracker-Demo
       dockerfile: Dockerfile
-      args:
-        GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     container_name: geotracker-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
     networks:

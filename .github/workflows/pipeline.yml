@@ -1,0 +1,386 @@
+name: "GeoTracker Pipeline"
+
+on:
+  push:
+    branches: [main]
+
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Select action to run"
+        required: true
+        type: choice
+        options:
+          - terraform-plan
+          - terraform-apply
+          - terraform-destroy
+          - build-deploy
+          - full
+
+concurrency:
+  group: geotracker-pipeline
+  cancel-in-progress: true
+
+jobs:
+  terraform:
+    name: "🏗️ Terraform"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      contains(fromJSON('["terraform-plan","terraform-apply","terraform-destroy","full"]'), github.event.inputs.action)
+
+    outputs:
+      ec2_public_ip: ${{ steps.apply.outputs.ec2_ip }}
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Download Terraform State
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: terraform-state
+          path: terraform/
+          search_artifacts: true
+          if_no_artifact_found: warn
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+        continue-on-error: true
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -var="key_name=${{ secrets.TF_VAR_KEY_NAME }}" -out=tfplan -no-color
+        if: github.event.inputs.action != 'terraform-destroy'
+
+      - name: Terraform Plan (Destroy)
+        run: terraform plan -destroy -var="key_name=${{ secrets.TF_VAR_KEY_NAME }}" -no-color
+        if: github.event.inputs.action == 'terraform-destroy'
+
+      - name: Terraform Apply
+        id: apply
+        if: github.event.inputs.action == 'terraform-apply' || github.event.inputs.action == 'full'
+        run: |
+          terraform apply -auto-approve -var="key_name=${{ secrets.TF_VAR_KEY_NAME }}"
+          echo "ec2_ip=$(terraform output -raw public_ip)" >> $GITHUB_OUTPUT
+
+      - name: Terraform Destroy
+        if: github.event.inputs.action == 'terraform-destroy'
+        run: terraform apply -destroy -auto-approve -var="key_name=${{ secrets.TF_VAR_KEY_NAME }}"
+
+      - name: Upload Terraform State
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-state
+          path: |
+            terraform/terraform.tfstate
+            terraform/terraform.tfstate.backup
+          overwrite: true
+          retention-days: 90
+
+  build:
+    name: "🐳 Build & Push Images"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [terraform]
+    if: >-
+      always() &&
+      (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' &&
+         contains(fromJSON('["build-deploy","full"]'), github.event.inputs.action))
+      )
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/geotracker-backend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/geotracker-backend:${{ github.sha }}
+
+      - name: Build & Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./GeoTracker-Demo
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/geotracker-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/geotracker-frontend:${{ github.sha }}
+
+  deploy:
+    name: "🚀 Deploy to EC2"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [terraform, build]
+    if: >-
+      always() &&
+      (needs.build.result == 'success') &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' &&
+         contains(fromJSON('["build-deploy","full"]'), github.event.inputs.action))
+      )
+
+    steps:
+      - name: Determine EC2 Host
+        id: host
+        run: |
+          if [ -n "${{ needs.terraform.outputs.ec2_public_ip }}" ]; then
+            echo "ec2_host=${{ needs.terraform.outputs.ec2_public_ip }}" >> $GITHUB_OUTPUT
+          else
+            echo "ec2_host=${{ secrets.EC2_HOST }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate EC2 Host
+        run: |
+          HOST="${{ steps.host.outputs.ec2_host }}"
+          if [ -z "$HOST" ]; then
+            echo "EC2_HOST is empty. Set the EC2_HOST secret or run terraform-apply first."
+            exit 1
+          fi
+          echo "Target host: $HOST"
+
+      - name: Wait for EC2 to be reachable
+        run: |
+          HOST="${{ steps.host.outputs.ec2_host }}"
+          echo "Waiting for $HOST to accept SSH connections..."
+          for i in $(seq 1 12); do
+            if ssh-keyscan -H "$HOST" 2>/dev/null | grep -q .; then
+              echo "Host is reachable!"
+              exit 0
+            fi
+            echo "Attempt $i/12 - not ready, waiting 10s..."
+            sleep 10
+          done
+          echo "Host not reachable after 2 minutes"
+          exit 1
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ steps.host.outputs.ec2_host }} >> ~/.ssh/known_hosts
+
+      - name: Setup EC2 (first-time + updates)
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ steps.host.outputs.ec2_host }} << 'EOF'
+            set -e
+
+            if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              sudo yum update -y
+              sudo yum install docker -y
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -aG docker $USER
+            fi
+
+            if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+              echo "Installing Docker Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
+            fi
+
+            if ! command -v nginx &> /dev/null; then
+              echo "Installing Nginx..."
+              sudo yum install nginx -y
+              sudo systemctl enable nginx
+              sudo systemctl start nginx
+            fi
+
+            if ! command -v certbot &> /dev/null; then
+              echo "Installing Certbot..."
+              sudo yum install certbot python3-certbot-nginx -y
+            fi
+
+            if grep -q "ssl_certificate" /etc/nginx/conf.d/geotracker.conf 2>/dev/null; then
+              echo "SSL config detected — skipping Nginx config overwrite"
+              sudo nginx -t && sudo systemctl reload nginx
+            else
+              echo "Writing initial Nginx config (HTTP only — run SSL setup after)"
+              sudo tee /etc/nginx/conf.d/geotracker.conf > /dev/null << 'NGINX'
+          server {
+              listen 80;
+              server_name _;
+
+              location / {
+                  proxy_pass http://127.0.0.1:3000;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+
+              location /api/ {
+                  proxy_pass http://127.0.0.1:8080/api/;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_read_timeout 300s;
+                  proxy_connect_timeout 75s;
+                  proxy_send_timeout 300s;
+              }
+          }
+          NGINX
+              sudo rm -f /etc/nginx/conf.d/default.conf
+              sudo nginx -t && sudo systemctl reload nginx
+            fi
+            echo "Nginx configured"
+
+            mkdir -p ~/geotracker
+          EOF
+
+      - name: Generate docker-compose.yml on EC2
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ steps.host.outputs.ec2_host }} << COMPOSE
+          mkdir -p ~/geotracker
+          cat > ~/geotracker/docker-compose.yml << 'DCFILE'
+          services:
+            postgres:
+              image: postgres:16-alpine
+              container_name: geotracker-db
+              restart: unless-stopped
+              environment:
+                POSTGRES_DB: \${POSTGRES_DB:-geotracker}
+                POSTGRES_USER: \${POSTGRES_USER:-geotracker}
+                POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-geotracker}
+              ports:
+                - "5432:5432"
+              volumes:
+                - postgres_data:/var/lib/postgresql/data
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER:-geotracker} -d \${POSTGRES_DB:-geotracker}"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+              networks:
+                - geotracker-net
+
+            redis:
+              image: redis:7-alpine
+              container_name: geotracker-cache
+              restart: unless-stopped
+              ports:
+                - "6379:6379"
+              volumes:
+                - redis_data:/data
+              healthcheck:
+                test: ["CMD", "redis-cli", "ping"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+              networks:
+                - geotracker-net
+
+            backend:
+              image: ${{ secrets.DOCKERHUB_USERNAME }}/geotracker-backend:latest
+              container_name: geotracker-backend
+              restart: unless-stopped
+              environment:
+                SPRING_DATASOURCE_URL: \${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/geotracker}
+                SPRING_DATASOURCE_USERNAME: \${SPRING_DATASOURCE_USERNAME:-geotracker}
+                SPRING_DATASOURCE_PASSWORD: \${SPRING_DATASOURCE_PASSWORD:-geotracker}
+                SPRING_DATA_REDIS_HOST: \${SPRING_DATA_REDIS_HOST:-redis}
+                SPRING_DATA_REDIS_PORT: \${SPRING_DATA_REDIS_PORT:-6379}
+                JWT_SECRET: \${JWT_SECRET:-geotracker-secret-key-must-be-at-least-256-bits-long-for-hs256}
+                JWT_EXPIRATION: \${JWT_EXPIRATION:-86400000}
+              ports:
+                - "8080:8080"
+              depends_on:
+                postgres:
+                  condition: service_healthy
+                redis:
+                  condition: service_healthy
+              networks:
+                - geotracker-net
+
+            frontend:
+              image: ${{ secrets.DOCKERHUB_USERNAME }}/geotracker-frontend:latest
+              container_name: geotracker-frontend
+              restart: unless-stopped
+              ports:
+                - "3000:80"
+              depends_on:
+                - backend
+              networks:
+                - geotracker-net
+
+          volumes:
+            postgres_data:
+            redis_data:
+
+          networks:
+            geotracker-net:
+              driver: bridge
+          DCFILE
+          COMPOSE
+
+      - name: Create .env on EC2
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ steps.host.outputs.ec2_host }} << EOF
+          cat > ~/geotracker/.env << 'ENVFILE'
+          POSTGRES_DB=geotracker
+          POSTGRES_USER=geotracker
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/geotracker
+          SPRING_DATASOURCE_USERNAME=geotracker
+          SPRING_DATASOURCE_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          SPRING_DATA_REDIS_HOST=redis
+          SPRING_DATA_REDIS_PORT=6379
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_EXPIRATION=86400000
+          ENVFILE
+          EOF
+
+      - name: Deploy Latest Image
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ steps.host.outputs.ec2_host }} << 'EOF'
+          set -e
+          cd ~/geotracker
+          sudo docker compose pull
+          sudo docker compose up -d
+          sudo docker image prune -f
+          echo "Deployment complete!"
+          sudo docker ps
+          EOF
