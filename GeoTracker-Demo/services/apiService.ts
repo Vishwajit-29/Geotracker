@@ -1,16 +1,29 @@
-import { User, AttendanceRecord, Role, Location, Geofence, Leave, LeaveType, LeaveStatus, MonthlyAttendanceSummary } from "../types";
+import {
+  User,
+  AttendanceRecord,
+  Role,
+  Location,
+  Geofence,
+  Leave,
+  LeaveType,
+  LeaveStatus,
+  MonthlyAttendanceSummary,
+} from "../types";
 
 // Auto-detect backend URL from current window or use environment
-// In WSL, use the same host as the frontend is served from
+// In production (behind Nginx), use relative /api path
+// In development (Vite dev server on port 3000), connect directly to backend:8080
 const getApiBaseUrl = (): string => {
   // Check if there's a custom API URL set in localStorage (useful for WSL/Windows)
-  const customUrl = localStorage.getItem('geotracker_api_url');
+  const customUrl = localStorage.getItem("geotracker_api_url");
   if (customUrl) return customUrl;
 
-  // Use relative path - works when frontend and backend are on same domain
-  // For development with separate ports, use the current hostname
-  const { protocol, hostname } = window.location;
-  // For WSL accessing from Windows browser, use current host
+  const { protocol, hostname, port } = window.location;
+  // In production (behind Nginx reverse proxy), use relative /api path
+  if (port !== "3000") {
+    return "/api";
+  }
+  // For local development, point directly to backend port
   return `${protocol}//${hostname}:8080/api`;
 };
 
@@ -22,7 +35,7 @@ const getToken = (): string | null => localStorage.getItem("geotracker_token");
 // Helper for authenticated fetch
 const fetchWithAuth = async (
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<Response> => {
   const token = getToken();
   const headers: HeadersInit = {
@@ -45,7 +58,10 @@ const fetchWithAuth = async (
 };
 
 // Auth API
-export const login = async (name: string, password: string): Promise<{ token: string; user: User }> => {
+export const login = async (
+  name: string,
+  password: string,
+): Promise<{ token: string; user: User }> => {
   const response = await fetch(`${API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -86,7 +102,10 @@ export const getAllUsers = async (): Promise<User[]> => {
   }));
 };
 
-export const addUser = async (name: string, password: string): Promise<User> => {
+export const addUser = async (
+  name: string,
+  password: string,
+): Promise<User> => {
   const response = await fetchWithAuth("/users", {
     method: "POST",
     body: JSON.stringify({ name, password }),
@@ -117,7 +136,7 @@ export const removeUser = async (userId: number): Promise<void> => {
 
 export const updateUserGeofence = async (
   userId: number,
-  geofence: Geofence | undefined
+  geofence: Geofence | undefined,
 ): Promise<User> => {
   const body = geofence
     ? {
@@ -152,7 +171,7 @@ export const updateUserGeofence = async (
 export const changePassword = async (
   currentPassword: string,
   newPassword: string,
-  confirmPassword: string
+  confirmPassword: string,
 ): Promise<void> => {
   await fetchWithAuth("/users/change-password", {
     method: "POST",
@@ -165,15 +184,19 @@ export const changePassword = async (
 };
 
 // Attendance API
-export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => {
+export const getAllAttendanceRecords = async (): Promise<
+  AttendanceRecord[]
+> => {
   const response = await fetchWithAuth("/attendance");
   const records = await response.json();
 
   return records.map((record: any) => ({
     id: record.id,
     userId: record.userId,
-    checkInTime: new Date(record.checkInTime + 'Z'),
-    checkOutTime: record.checkOutTime ? new Date(record.checkOutTime + 'Z') : undefined,
+    checkInTime: new Date(record.checkInTime + "Z"),
+    checkOutTime: record.checkOutTime
+      ? new Date(record.checkOutTime + "Z")
+      : undefined,
     checkInLocation: {
       latitude: record.checkInLatitude,
       longitude: record.checkInLongitude,
@@ -181,15 +204,19 @@ export const getAllAttendanceRecords = async (): Promise<AttendanceRecord[]> => 
   }));
 };
 
-export const getUserAttendanceRecords = async (userId: number): Promise<AttendanceRecord[]> => {
+export const getUserAttendanceRecords = async (
+  userId: number,
+): Promise<AttendanceRecord[]> => {
   const response = await fetchWithAuth(`/attendance/user/${userId}`);
   const records = await response.json();
 
   return records.map((record: any) => ({
     id: record.id,
     userId: record.userId,
-    checkInTime: new Date(record.checkInTime + 'Z'),
-    checkOutTime: record.checkOutTime ? new Date(record.checkOutTime + 'Z') : undefined,
+    checkInTime: new Date(record.checkInTime + "Z"),
+    checkOutTime: record.checkOutTime
+      ? new Date(record.checkOutTime + "Z")
+      : undefined,
     checkInLocation: {
       latitude: record.checkInLatitude,
       longitude: record.checkInLongitude,
@@ -197,7 +224,9 @@ export const getUserAttendanceRecords = async (userId: number): Promise<Attendan
   }));
 };
 
-export const checkIn = async (location: Location): Promise<AttendanceRecord> => {
+export const checkIn = async (
+  location: Location,
+): Promise<AttendanceRecord> => {
   const response = await fetchWithAuth("/attendance/checkin", {
     method: "POST",
     body: JSON.stringify(location),
@@ -208,7 +237,9 @@ export const checkIn = async (location: Location): Promise<AttendanceRecord> => 
     id: record.id,
     userId: record.userId,
     checkInTime: new Date(record.checkInTime),
-    checkOutTime: record.checkOutTime ? new Date(record.checkOutTime) : undefined,
+    checkOutTime: record.checkOutTime
+      ? new Date(record.checkOutTime)
+      : undefined,
     checkInLocation: {
       latitude: record.checkInLatitude,
       longitude: record.checkInLongitude,
@@ -226,7 +257,9 @@ export const checkOut = async (): Promise<AttendanceRecord> => {
     id: record.id,
     userId: record.userId,
     checkInTime: new Date(record.checkInTime),
-    checkOutTime: record.checkOutTime ? new Date(record.checkOutTime) : undefined,
+    checkOutTime: record.checkOutTime
+      ? new Date(record.checkOutTime)
+      : undefined,
     checkInLocation: {
       latitude: record.checkInLatitude,
       longitude: record.checkInLongitude,
@@ -266,7 +299,7 @@ export const initializeAPI = async (): Promise<boolean> => {
 
 // Method to override API URL (useful for WSL+Windows setup)
 export const setApiUrl = (url: string) => {
-  localStorage.setItem('geotracker_api_url', url);
+  localStorage.setItem("geotracker_api_url", url);
 };
 
 // Get current API URL for display
@@ -297,20 +330,22 @@ export const getLeavesByUser = async (userId: number): Promise<Leave[]> => {
   const response = await fetchWithAuth("/leaves");
   const leaves = await response.json();
 
-  return leaves.filter((leave: any) => leave.userId === userId).map((leave: any) => ({
-    id: leave.id,
-    userId: leave.userId,
-    userName: leave.userName,
-    type: leave.type as LeaveType,
-    status: leave.status as LeaveStatus,
-    startDate: new Date(leave.startDate),
-    endDate: new Date(leave.endDate),
-    reason: leave.reason,
-    approvedBy: leave.approvedBy,
-    approvedByName: leave.approvedByName,
-    approvedAt: leave.approvedAt ? new Date(leave.approvedAt) : undefined,
-    createdAt: new Date(leave.createdAt),
-  }));
+  return leaves
+    .filter((leave: any) => leave.userId === userId)
+    .map((leave: any) => ({
+      id: leave.id,
+      userId: leave.userId,
+      userName: leave.userName,
+      type: leave.type as LeaveType,
+      status: leave.status as LeaveStatus,
+      startDate: new Date(leave.startDate),
+      endDate: new Date(leave.endDate),
+      reason: leave.reason,
+      approvedBy: leave.approvedBy,
+      approvedByName: leave.approvedByName,
+      approvedAt: leave.approvedAt ? new Date(leave.approvedAt) : undefined,
+      createdAt: new Date(leave.createdAt),
+    }));
 };
 
 export const getPendingLeaves = async (): Promise<Leave[]> => {
@@ -357,7 +392,7 @@ export const createLeave = async (
   type: LeaveType,
   startDate: string,
   endDate: string,
-  reason: string
+  reason: string,
 ): Promise<Leave> => {
   const response = await fetchWithAuth("/leaves", {
     method: "POST",
@@ -433,7 +468,7 @@ export const rejectLeave = async (leaveId: number): Promise<Leave> => {
 // ==================== Monthly Attendance Summary ====================
 export const getMonthlyAttendanceSummary = async (
   year: number,
-  month: number
+  month: number,
 ): Promise<MonthlyAttendanceSummary> => {
   const response = await fetchWithAuth(`/attendance/summary/${year}/${month}`);
   const summary = await response.json();
@@ -450,9 +485,11 @@ export const getMonthlyAttendanceSummary = async (
 export const getUserMonthlySummary = async (
   userId: number,
   year: number,
-  month: number
+  month: number,
 ): Promise<MonthlyAttendanceSummary> => {
-  const response = await fetchWithAuth(`/attendance/summary/${userId}/${year}/${month}`);
+  const response = await fetchWithAuth(
+    `/attendance/summary/${userId}/${year}/${month}`,
+  );
   const summary = await response.json();
 
   return {

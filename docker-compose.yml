@@ -1,24 +1,34 @@
 services:
+  # ---- PostgreSQL Database ----
   postgres:
     image: postgres:16-alpine
     container_name: geotracker-db
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: geotracker
-      POSTGRES_USER: geotracker
-      POSTGRES_PASSWORD: geotracker
+      POSTGRES_DB: ${POSTGRES_DB:-geotracker}
+      POSTGRES_USER: ${POSTGRES_USER:-geotracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-geotracker}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U geotracker -d geotracker"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-geotracker} -d ${POSTGRES_DB:-geotracker}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - geotracker-net
 
+  # ---- Redis Cache ----
   redis:
     image: redis:7-alpine
     container_name: geotracker-cache
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -28,7 +38,54 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - geotracker-net
+
+  # ---- Spring Boot Backend ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: geotracker-backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/geotracker}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-geotracker}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-geotracker}
+      SPRING_DATA_REDIS_HOST: ${SPRING_DATA_REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${SPRING_DATA_REDIS_PORT:-6379}
+      JWT_SECRET: ${JWT_SECRET:-geotracker-secret-key-must-be-at-least-256-bits-long-for-hs256}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - geotracker-net
+
+  # ---- React Frontend (Nginx) ----
+  frontend:
+    build:
+      context: ./GeoTracker-Demo
+      dockerfile: Dockerfile
+      args:
+        GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    container_name: geotracker-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - geotracker-net
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  geotracker-net:
+    driver: bridge
