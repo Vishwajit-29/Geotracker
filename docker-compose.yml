@@ -1,5 +1,4 @@
 services:
-  # ---- PostgreSQL Database ----
   postgres:
     image: postgres:16-alpine
     container_name: geotracker-db
@@ -24,7 +23,6 @@ services:
     networks:
       - geotracker-net
 
-  # ---- Redis Cache ----
   redis:
     image: redis:7-alpine
     container_name: geotracker-cache
@@ -41,7 +39,6 @@ services:
     networks:
       - geotracker-net
 
-  # ---- Spring Boot Backend ----
   backend:
     build:
       context: ./backend
@@ -66,7 +63,6 @@ services:
     networks:
       - geotracker-net
 
-  # ---- React Frontend (Nginx) ----
   frontend:
     build:
       context: ./GeoTracker-Demo
