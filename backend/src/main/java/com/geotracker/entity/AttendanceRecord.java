@@ -31,4 +31,8 @@ public class AttendanceRecord {
 
     @Column(nullable = false)
     private Double checkInLongitude;
+
+    /** True when check-in/out was triggered automatically by the schedule engine. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean automatic = false;
 }

@@ -17,6 +17,7 @@ public class AttendanceResponse {
     private LocalDateTime checkOutTime;
     private Double checkInLatitude;
     private Double checkInLongitude;
+    private boolean automatic;
 
     public static AttendanceResponse fromEntity(AttendanceRecord record) {
         return new AttendanceResponse(
@@ -26,7 +27,8 @@ public class AttendanceResponse {
             record.getCheckInTime(),
             record.getCheckOutTime(),
             record.getCheckInLatitude(),
-            record.getCheckInLongitude()
+            record.getCheckInLongitude(),
+            record.isAutomatic()
         );
     }
 }

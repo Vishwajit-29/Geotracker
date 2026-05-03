@@ -17,6 +17,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final WorkScheduleService workScheduleService;
 
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
@@ -38,7 +39,10 @@ public class UserService {
         user.setName(name);
         user.setPassword(passwordEncoder.encode(password));
         user.setRole(User.Role.EMPLOYEE);
-        return UserResponse.fromEntity(userRepository.save(user));
+        User saved = userRepository.save(user);
+        // Auto-assign default 09:00-18:00 Mon-Fri schedule for new employees
+        workScheduleService.assignDefaultSchedule(saved);
+        return UserResponse.fromEntity(saved);
     }
 
     @Transactional

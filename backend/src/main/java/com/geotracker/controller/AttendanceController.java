@@ -90,4 +90,31 @@ public class AttendanceController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+
+    /** Auto check-in — called by the schedule engine (web or mobile), sets automatic=true */
+    @PostMapping("/auto-checkin")
+    public ResponseEntity<?> autoCheckIn(
+            @RequestBody CheckInRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            User user = userRepository.findByName(userDetails.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            return ResponseEntity.ok(attendanceService.checkInAutomatic(user, request));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    /** Auto check-out — called by schedule engine when office hours end or geofence miss */
+    @PostMapping("/auto-checkout")
+    public ResponseEntity<?> autoCheckOut(@AuthenticationPrincipal UserDetails userDetails) {
+        try {
+            User user = userRepository.findByName(userDetails.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            return ResponseEntity.ok(attendanceService.checkOutAutomatic(user));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }
+

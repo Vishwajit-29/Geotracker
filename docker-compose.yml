@@ -54,7 +54,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-geotracker-secret-key-must-be-at-least-256-bits-long-for-hs256}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
     ports:
-      - "8080:8080"
+      - "8088:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +65,7 @@ services:
 
   frontend:
     build:
-      context: ./GeoTracker-Demo
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: geotracker-frontend
     restart: unless-stopped
