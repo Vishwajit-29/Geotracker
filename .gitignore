@@ -4,6 +4,7 @@
 # Node
 node_modules/
 dist/
+.dist/
 
 # Java / Maven
 target/
@@ -30,3 +31,8 @@ Thumbs.db
 
 # Docker
 *.log
+
+# Expo / Mobile
+.expo/
+android/
+ios/

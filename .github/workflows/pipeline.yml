@@ -139,7 +139,7 @@ jobs:
       - name: Build & Push Frontend Image
         uses: docker/build-push-action@v5
         with:
-          context: ./GeoTracker-Demo
+          context: ./frontend
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/geotracker-frontend:latest
