@@ -205,6 +205,12 @@ jobs:
           ssh ${{ secrets.EC2_USER }}@${{ steps.host.outputs.ec2_host }} << 'EOF'
             set -e
 
+            echo "Waiting for apt locks to release..."
+            while sudo fuser /var/lib/apt/lists/lock /var/lib/dpkg/lock /var/lib/dpkg/lock-frontend 2>/dev/null; do
+              echo "apt is locked, waiting 5s..."
+              sleep 5
+            done
+
             if ! command -v docker &> /dev/null; then
               echo "Installing Docker..."
               sudo apt-get update -y
