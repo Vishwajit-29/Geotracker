@@ -7,13 +7,13 @@ variable "aws_region" {
 variable "instance_type" {
   description = "EC2 instance type"
   type        = string
-  default     = "t3.micro"
+  default     = "m7i-flex.large"
 }
 
 variable "ami_id" {
-  description = "AMI ID for the EC2 instance (Amazon Linux 2023 in ap-south-1)"
+  description = "AMI ID for the EC2 instance (Ubuntu 24.04 in ap-south-1)"
   type        = string
-  default     = "ami-0e35ddab05955cf57"
+  default     = "ami-0dee22c13ea7a9a67"
 }
 
 variable "key_name" {
